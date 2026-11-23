@@ -28,3 +28,8 @@ use the editor.
   own key and store it in Secrets.
 - **Secrets.** Lovable manages them. Do not put secret values in the repo.
 <!-- LOVABLE:END -->
+
+## Project rules
+
+- Riddle-solving logic lives in `src/lib/solve.server.ts` and is loaded with a dynamic import inside the `/api/solve` handler — keeps the AI key and prompt out of the browser bundle.
+- Answer normalisation is a pure helper (`src/lib/solve-answer.ts`) covered by `src/test/solve-answer.test.ts` — change both together.
