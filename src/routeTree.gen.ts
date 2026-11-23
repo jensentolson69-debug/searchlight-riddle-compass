@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiSolveRouteImport } from './routes/api/solve'
+import { Route as ApiPublicSolveRouteImport } from './routes/api/public/solve'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -22,31 +23,40 @@ const ApiSolveRoute = ApiSolveRouteImport.update({
   path: '/api/solve',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicSolveRoute = ApiPublicSolveRouteImport.update({
+  id: '/api/public/solve',
+  path: '/api/public/solve',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/api/solve': typeof ApiSolveRoute
+  '/api/public/solve': typeof ApiPublicSolveRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/api/solve': typeof ApiSolveRoute
+  '/api/public/solve': typeof ApiPublicSolveRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/api/solve': typeof ApiSolveRoute
+  '/api/public/solve': typeof ApiPublicSolveRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api/solve'
+  fullPaths: '/' | '/api/solve' | '/api/public/solve'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/solve'
-  id: '__root__' | '/' | '/api/solve'
+  to: '/' | '/api/solve' | '/api/public/solve'
+  id: '__root__' | '/' | '/api/solve' | '/api/public/solve'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ApiSolveRoute: typeof ApiSolveRoute
+  ApiPublicSolveRoute: typeof ApiPublicSolveRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -65,12 +75,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiSolveRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/solve': {
+      id: '/api/public/solve'
+      path: '/api/public/solve'
+      fullPath: '/api/public/solve'
+      preLoaderRoute: typeof ApiPublicSolveRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ApiSolveRoute: ApiSolveRoute,
+  ApiPublicSolveRoute: ApiPublicSolveRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

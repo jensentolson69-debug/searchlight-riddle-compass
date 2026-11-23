@@ -11,8 +11,12 @@ describe("cleanAnswer", () => {
     expect(cleanAnswer('```\n"meowl"\n```')).toBe("MEOWL");
   });
 
-  it("rejects answers shorter than 2 characters", () => {
-    expect(cleanAnswer("a")).toBeNull();
+  it("keeps a single-character answer", () => {
+    expect(cleanAnswer("4")).toBe("4");
+  });
+
+  it("keeps a single letter answer", () => {
+    expect(cleanAnswer("a")).toBe("A");
   });
 
   it("rejects answers longer than 50 characters", () => {
