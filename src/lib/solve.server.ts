@@ -83,7 +83,7 @@ FIRST BRAINROT: STRAWBERRYELEPHANT
 5. Return ONLY the answer, nothing else.`;
 
 // The uploaded gemini-2.0-flash-exp is no longer offered by the gateway; this is the closest
-// fast Gemini model that answers within the 50-token cap while supporting Google Search.
+// fast Gemini model that supports Google Search.
 const MODEL = "google/gemini-3.1-flash-lite";
 
 export type SolveResult = { answer: string | null; error: string | null; status: number };
@@ -108,7 +108,9 @@ export async function solveRiddle(riddle: string): Promise<SolveResult> {
         { role: "user", content: riddle.slice(0, 1000) },
       ],
       temperature: 0,
-      max_tokens: 50,
+      // 50 (the original cap) returned empty content whenever Google Search ran: the model hit
+      // MAX_TOKENS before writing the answer. The prompt and cleanAnswer still keep answers short.
+      max_tokens: 400,
     }),
   });
 
@@ -117,11 +119,12 @@ export async function solveRiddle(riddle: string): Promise<SolveResult> {
     if (r.status === 402) return { answer: null, error: "Out of AI credits", status: 402 };
     if (r.status === 429) return { answer: null, error: "Rate limited", status: 429 };
     console.error("AI gateway error", r.status, body.slice(0, 300));
-    return { answer: null, error: `AI error ${r.status}`, status: 502 };
+    // Not 502: the preview proxy replaces 502 bodies with its own HTML error page.
+    return { answer: null, error: `AI error ${r.status}`, status: 500 };
   }
 
   const j = (await r.json()) as { choices?: { message?: { content?: string } }[] };
   const answer = cleanAnswer(j.choices?.[0]?.message?.content);
-  if (!answer) return { answer: null, error: "No answer found", status: 502 };
+  if (!answer) return { answer: null, error: "No answer found", status: 422 };
   return { answer, error: null, status: 200 };
 }
