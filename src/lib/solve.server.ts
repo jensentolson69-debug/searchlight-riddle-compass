@@ -1,14 +1,15 @@
 // Server-only: loaded dynamically from the /api/solve handler so it never reaches the browser bundle.
 //
-// Lookup order (the user's rule):
-//   1. Ask sab-trackerai.lovable.app's "Ask AI".
-//   2. If it can't answer, look in that site's Database (snapshot in tracker-database.server.ts).
-//   3. Only if both fail, ask Gemini with live Google Search.
-// Steps 1+2 are judged by one AI call that turns the tracker's sentence into a clean code, or says UNKNOWN.
+// Lookup (the user's rule, made fast):
+//   - sab-trackerai.lovable.app's "Ask AI" and the database check (user's list + that site's Database
+//     snapshot in tracker-database.server.ts) start at the same time.
+//   - If the database knows the answer it is sent at once — it wins even when the website AI disagrees.
+//   - Otherwise the website AI's answer is used (short replies need no extra AI call).
+//   - Only if both fail, ask Gemini with live Google Search.
 import { cleanAnswer } from "./solve-answer";
 import { askTracker } from "./tracker.server";
 import { TRACKER_DATABASE } from "./tracker-database.server";
-import { isUnknown } from "./tracker-reply";
+import { isUnknown, quickTrackerCode } from "./tracker-reply";
 
 // The user's own Sammy / game facts (from the original solver). Corrected per the user: cat = NOVA,
 // "best brainrot" = STRAWBERRYELEPHANT.
@@ -96,35 +97,45 @@ ${OWN_FACTS}
 4. Answer ONLY in UPPERCASE, no spaces, no punctuation.
 5. Return ONLY the answer, nothing else.`;
 
-function trackerPrompt(trackerReply: string | null): string {
-  return `You turn answers about the Roblox game "Steal a Brainrot" (SAB) and its creator Sammy (SpyderSammy) into a riddle code.
+const CONFIRMED = `"best brainrot" = STRAWBERRYELEPHANT. Sammy's cat = NOVA. Sammy's age = 24.`;
+
+/** Database check: the user's own list + the tracker website's Database tab. Says UNKNOWN when unsure. */
+const DATABASE_PROMPT = `You turn riddles about the Roblox game "Steal a Brainrot" (SAB) and its creator Sammy (SpyderSammy) into a code.
 The riddle is written as if Sammy is speaking ("my cat" = Sammy's cat, "my age" = Sammy's age).
 
 Sources, in priority order:
-A. CONFIRMED OVERRIDES (always win): "best brainrot" = STRAWBERRYELEPHANT. Sammy's cat = NOVA. Sammy's age = 24.
-B. THE USER'S OWN FACTS (below) — when they disagree with C or D, B wins.
-C. THE TRACKER WEBSITE'S AI REPLY: ${trackerReply ? JSON.stringify(trackerReply) : "(no reply)"}
-D. THE TRACKER WEBSITE'S DATABASE (below) — use it for any part the AI reply does not answer.
+A. CONFIRMED OVERRIDES (always win): ${CONFIRMED}
+B. THE USER'S OWN FACTS (below) — when they disagree with C, B wins.
+C. THE TRACKER WEBSITE'S DATABASE (below).
 
 Rules:
 1. Solve every part of the riddle (parts joined by +, AND, or commas) and concatenate them in order WITHOUT spaces.
 2. If a source names several options, use the main/first one.
 3. Numbers stay as digits (24, not TWENTYFOUR) unless the source writes them as words.
-4. If ANY part cannot be answered from sources A–D, reply exactly UNKNOWN. Never guess.
+4. If ANY part is not clearly answered by sources A–C, reply exactly UNKNOWN. Never guess.
 5. Reply with ONLY the code in UPPERCASE: letters and digits, no spaces, no punctuation, no explanation.
 
 === B. THE USER'S OWN FACTS ===
 ${OWN_FACTS}
 
-=== D. TRACKER WEBSITE DATABASE ===
+=== C. TRACKER WEBSITE DATABASE ===
 ${TRACKER_DATABASE}`;
+
+/** Small, fast prompt that turns the tracker website AI's sentence into a code. */
+function extractPrompt(trackerReply: string): string {
+  return `Turn the website AI's reply into the answer code for the riddle (Roblox game "Steal a Brainrot", creator Sammy).
+Website AI reply: ${JSON.stringify(trackerReply)}
+Confirmed overrides (always win): ${CONFIRMED}
+Rules: answer every part of the riddle in order, joined WITHOUT spaces. If the reply names several options, use the first.
+Numbers stay as digits. If the reply does not answer every part, reply exactly UNKNOWN.
+Reply with ONLY the code in UPPERCASE letters and digits.`;
 }
 
 // The uploaded gemini-2.0-flash-exp is no longer offered by the gateway; this is the closest
 // fast Gemini model that supports Google Search.
 const MODEL = "google/gemini-3.1-flash-lite";
 
-export type SolveSource = "tracker" | "google";
+export type SolveSource = "database" | "tracker" | "google";
 export type SolveResult = {
   answer: string | null;
   error: string | null;
@@ -174,16 +185,34 @@ export async function solveRiddle(riddle: string): Promise<SolveResult> {
   const key = process.env["LOVABLE_API_KEY"];
   if (!key) return { answer: null, error: "AI not configured", status: 500 };
 
-  // Steps 1 + 2: tracker website AI, then its database.
-  const trackerReply = await askTracker(riddle);
-  const fromTracker = await callAi(key, trackerPrompt(trackerReply), riddle, false);
-  if (fromTracker.error && fromTracker.error.status !== 500) return fromTracker.error;
-  if (!fromTracker.error && !isUnknown(fromTracker.code)) {
-    console.log("solve: tracker", JSON.stringify({ riddle, trackerReply, answer: fromTracker.code }));
-    return { answer: fromTracker.code, error: null, status: 200, source: "tracker" };
+  // Ask the website AI and check the database at the same time, so nobody waits on the other.
+  const trackerReplyPromise = askTracker(riddle);
+  const fromDb = await callAi(key, DATABASE_PROMPT, riddle, false);
+  if (fromDb.error && fromDb.error.status !== 500) return fromDb.error;
+
+  // The database (the user's list, then the website's Database tab) wins whenever it knows the answer —
+  // including when the website AI says something different — so send it right away.
+  if (!fromDb.error && !isUnknown(fromDb.code)) {
+    console.log("solve: database", JSON.stringify({ riddle, answer: fromDb.code }));
+    return { answer: fromDb.code, error: null, status: 200, source: "database" };
   }
 
-  // Step 3: Google Search fallback.
+  // Database doesn't know: use the website AI's answer.
+  const trackerReply = await trackerReplyPromise;
+  if (trackerReply) {
+    let code = quickTrackerCode(riddle, trackerReply);
+    if (!code) {
+      const extracted = await callAi(key, extractPrompt(trackerReply), riddle, false);
+      if (extracted.error && extracted.error.status !== 500) return extracted.error;
+      code = extracted.code;
+    }
+    if (!isUnknown(code)) {
+      console.log("solve: tracker", JSON.stringify({ riddle, trackerReply, answer: code }));
+      return { answer: code, error: null, status: 200, source: "tracker" };
+    }
+  }
+
+  // Neither knows: Google Search.
   const fromGoogle = await callAi(key, GOOGLE_PROMPT, riddle, true);
   if (fromGoogle.error) return fromGoogle.error;
   if (!fromGoogle.code) return { answer: null, error: "No answer found", status: 422 };

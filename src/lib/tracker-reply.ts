@@ -1,4 +1,5 @@
 // Pure helpers for talking to sab-trackerai.lovable.app's "Ask AI" server function.
+import { cleanAnswer } from "./solve-answer";
 
 export const TRACKER_ORIGIN = "https://sab-trackerai.lovable.app";
 export const TRACKER_ASK_URL = `${TRACKER_ORIGIN}/_serverFn/02c7eb98dcc942066dc5ebda9810837cb3d6a42389e9598127d31b50639cd9dd`;
@@ -42,4 +43,19 @@ export function parseTrackerReply(raw: string): string | null {
 /** True when the extraction model says the sources do not contain the answer. */
 export function isUnknown(code: string | null): boolean {
   return !code || /^(UNKNOWN|NONE|NULL|NA|IDK)$/.test(code) || code.includes("UNKNOWN");
+}
+
+const MULTI_PART = /\+|&|,|\band\b/i;
+const NOT_AN_ANSWER = /\b(know|sorry|not|no|unknown|unsure|unclear|can'?t|cannot|don'?t)\b/i;
+
+/**
+ * Turn a short, single-part tracker reply ("Red.", "Hacker (15x, reported)") straight into a code,
+ * skipping an AI call. Returns null when the reply needs the AI to read it.
+ */
+export function quickTrackerCode(riddle: string, reply: string): string | null {
+  if (MULTI_PART.test(riddle)) return null;
+  const core = reply.replace(/\([^)]*\)/g, "").replace(/[.!]+$/, "").trim();
+  if (!core || MULTI_PART.test(core) || NOT_AN_ANSWER.test(core)) return null;
+  if (core.split(/\s+/).length > 3) return null;
+  return cleanAnswer(core);
 }

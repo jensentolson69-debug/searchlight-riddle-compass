@@ -33,4 +33,4 @@ use the editor.
 
 - Riddle-solving logic lives in `src/lib/solve.server.ts` and is loaded with a dynamic import inside the `/api/solve` handler — keeps the AI key and prompt out of the browser bundle.
 - Answer normalisation is a pure helper (`src/lib/solve-answer.ts`) covered by `src/test/solve-answer.test.ts` — change both together.
-- Riddle lookup is a cascade in `solve.server.ts`: tracker site Ask AI (`tracker.server.ts`) → tracker Database snapshot (`tracker-database.server.ts`) → Gemini with Google Search; covered by `src/test/solve-cascade.test.ts` — keeps the website as the primary source and Google as the backup.
+- Riddle lookup in `solve.server.ts`: tracker site Ask AI (`tracker.server.ts`) and a database check (user facts + `tracker-database.server.ts`) start in parallel; a known database answer returns at once, else the tracker reply (short ones parsed without AI via `quickTrackerCode`), else Gemini with Google Search; covered by `src/test/solve-cascade.test.ts` — keeps answers fast while Google stays the last resort.
