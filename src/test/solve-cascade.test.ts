@@ -57,7 +57,8 @@ describe("solveRiddle lookup order", () => {
     vi.unstubAllGlobals();
   });
 
-  function stubFetch(answers: { tracker: string; database: string; extract?: string; google?: string }) {
+  type Answer = string | [string, string]; // [first model, second checker]
+  function stubFetch(answers: { tracker: string; database: Answer; extract?: Answer; google?: Answer }) {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: string, init?: RequestInit) => {
@@ -68,7 +69,9 @@ describe("solveRiddle lookup order", () => {
         const body = typeof init?.body === "string" ? init.body : "";
         const kind: Kind = body.includes("google_search") ? "google" : body.includes("TRACKER WEBSITE DATABASE") ? "database" : "extract";
         calls.push(kind);
-        return aiReply(answers[kind] ?? "UNKNOWN");
+        const a = answers[kind] ?? "UNKNOWN";
+        const isChecker = body.includes("gemini-3-flash-preview");
+        return aiReply(typeof a === "string" ? a : a[isChecker ? 1 : 0]);
       }),
     );
   }
@@ -102,5 +105,32 @@ describe("solveRiddle lookup order", () => {
     expect(r.answer).toBe("SPAIN");
     expect(r.source).toBe("google");
     expect(calls.at(-1)).toBe("google");
+  });
+
+  it("checks the database twice at the same time and sends it only when both agree", async () => {
+    stubFetch({ tracker: "SpyderSammy, Strawberry Elephant, Yin Yang.", database: "SPYDERSAMMYSTRAWBERRYELEPHANTYINGYANG" });
+    const r = await solveRiddle("What my username best brainrot in the game and my favourite mutation");
+    expect(r.answer).toBe("SPYDERSAMMYSTRAWBERRYELEPHANTYINGYANG");
+    expect(r.source).toBe("database");
+    expect(calls.filter((c) => c === "database")).toHaveLength(2);
+  });
+
+  it("does not trust the database when its two checks disagree, and uses the website AI instead", async () => {
+    stubFetch({ tracker: "Hacker (15×, reported)", database: ["HACKER", "CYBER"] });
+    const r = await solveRiddle("what is the newest mutation");
+    expect(r.answer).toBe("HACKER");
+    expect(r.source).toBe("tracker");
+  });
+
+  it("when the two readings of the website AI disagree, takes the one the database also gave", async () => {
+    stubFetch({ tracker: "Nova and 24.", database: ["NOVA24", "UNKNOWN"], extract: ["NOVA24", "NOVATWENTYFOUR"] });
+    const r = await solveRiddle("my cat + my age");
+    expect(r.answer).toBe("NOVA24");
+  });
+
+  it("checks Google twice too", async () => {
+    stubFetch({ tracker: "Can't help you with that.", database: "UNKNOWN", google: "SPAIN" });
+    await solveRiddle("who won the world cup");
+    expect(calls.filter((c) => c === "google")).toHaveLength(2);
   });
 });

@@ -3,7 +3,8 @@
 // Lookup (the user's rule, made fast):
 //   - sab-trackerai.lovable.app's "Ask AI" and the database check (user's list + that site's Database
 //     snapshot in tracker-database.server.ts) start at the same time.
-//   - If the database knows the answer it is sent at once — it wins even when the website AI disagrees.
+//   - The database is checked twice in parallel (two models); if both agree the answer is sent at once —
+//     it wins even when the website AI disagrees. Website-AI sentences and Google are also read twice.
 //   - Otherwise the website AI's answer is used (short replies need no extra AI call).
 //   - Only if both fail, ask Gemini with live Google Search.
 import { cleanAnswer } from "./solve-answer";
@@ -51,6 +52,7 @@ BIRTHPLACE: ALGERIA
 NATIONALITY: BRAZILIAN
 REAL NAME: SAMMY
 CAT (PET) NAME: NOVA
+FAVORITE MUTATION: YINGYANG
 
 === MUTATIONS (IN ORDER) ===
 1: GOLD, 2: DIAMOND, 3: BLOODROT, 4: RAINBOW, 5: CANDY
@@ -97,7 +99,7 @@ ${OWN_FACTS}
 4. Answer ONLY in UPPERCASE, no spaces, no punctuation.
 5. Return ONLY the answer, nothing else.`;
 
-const CONFIRMED = `"best brainrot" = STRAWBERRYELEPHANT. Sammy's cat = NOVA. Sammy's age = 24.`;
+const CONFIRMED = `"best brainrot" = STRAWBERRYELEPHANT. Sammy's cat = NOVA. Sammy's age = 24. Sammy's username = SPYDERSAMMY. Sammy's favourite mutation = YINGYANG (spelled exactly YINGYANG).`;
 
 /** Database check: the user's own list + the tracker website's Database tab. Says UNKNOWN when unsure. */
 const DATABASE_PROMPT = `You turn riddles about the Roblox game "Steal a Brainrot" (SAB) and its creator Sammy (SpyderSammy) into a code.
@@ -134,6 +136,9 @@ Reply with ONLY the code in UPPERCASE letters and digits.`;
 // The uploaded gemini-2.0-flash-exp is no longer offered by the gateway; this is the closest
 // fast Gemini model that supports Google Search.
 const MODEL = "google/gemini-3.1-flash-lite";
+// Second, independent checker (the user asked for every answer to be checked twice). Both run in
+// parallel, so checking twice costs no extra time.
+const CHECK_MODEL = "google/gemini-3-flash-preview";
 
 export type SolveSource = "database" | "tracker" | "google";
 export type SolveResult = {
@@ -145,7 +150,13 @@ export type SolveResult = {
 
 type AiResult = { code: string | null; error: SolveResult | null };
 
-async function callAi(key: string, system: string, riddle: string, withSearch: boolean): Promise<AiResult> {
+async function callAi(
+  key: string,
+  system: string,
+  riddle: string,
+  withSearch: boolean,
+  model: string = MODEL,
+): Promise<AiResult> {
   const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -154,7 +165,7 @@ async function callAi(key: string, system: string, riddle: string, withSearch: b
       "X-Lovable-AIG-SDK": "fetch",
     },
     body: JSON.stringify({
-      model: MODEL,
+      model,
       stream: false,
       ...(withSearch ? { tools: [{ type: "google_search" }] } : {}),
       messages: [
@@ -181,41 +192,57 @@ async function callAi(key: string, system: string, riddle: string, withSearch: b
   return { code: cleanAnswer(j.choices?.[0]?.message?.content), error: null };
 }
 
+type Checked = { code: string | null; candidates: string[]; error: SolveResult | null };
+
+/** Ask two models at once; `code` is set only when both give the same real answer. */
+async function checkTwice(key: string, system: string, riddle: string, withSearch: boolean): Promise<Checked> {
+  const [a, b] = await Promise.all([
+    callAi(key, system, riddle, withSearch, MODEL),
+    callAi(key, system, riddle, withSearch, CHECK_MODEL),
+  ]);
+  const candidates = [a.code, b.code].filter((c): c is string => !isUnknown(c));
+  const agreed = candidates.length === 2 && candidates[0] === candidates[1] ? candidates[0]! : null;
+  // Stop only when BOTH checks hit credits/rate limits; one failed check just means "not confirmed".
+  const hardError = a.error && b.error ? ([a.error, b.error].find((e) => e.status !== 500) ?? null) : null;
+  return { code: agreed, candidates, error: hardError };
+}
+
 export async function solveRiddle(riddle: string): Promise<SolveResult> {
   const key = process.env["LOVABLE_API_KEY"];
   if (!key) return { answer: null, error: "AI not configured", status: 500 };
+  const ok = (answer: string, source: SolveSource, extra: object = {}): SolveResult => {
+    console.log(`solve: ${source}`, JSON.stringify({ riddle, answer, ...extra }));
+    return { answer, error: null, status: 200, source };
+  };
 
-  // Ask the website AI and check the database at the same time, so nobody waits on the other.
+  // Ask the website AI and check the database (twice, in parallel) at the same time.
   const trackerReplyPromise = askTracker(riddle);
-  const fromDb = await callAi(key, DATABASE_PROMPT, riddle, false);
-  if (fromDb.error && fromDb.error.status !== 500) return fromDb.error;
+  const fromDb = await checkTwice(key, DATABASE_PROMPT, riddle, false);
+  if (fromDb.error) return fromDb.error;
 
-  // The database (the user's list, then the website's Database tab) wins whenever it knows the answer —
-  // including when the website AI says something different — so send it right away.
-  if (!fromDb.error && !isUnknown(fromDb.code)) {
-    console.log("solve: database", JSON.stringify({ riddle, answer: fromDb.code }));
-    return { answer: fromDb.code, error: null, status: 200, source: "database" };
-  }
+  // Both database checks agree: it wins even over the website AI, so send it right away.
+  if (fromDb.code) return ok(fromDb.code, "database");
 
-  // Database doesn't know: use the website AI's answer.
+  // Otherwise use the website AI's answer, read twice when it is a sentence.
   const trackerReply = await trackerReplyPromise;
+  let trackerCode: string | null = null;
   if (trackerReply) {
-    let code = quickTrackerCode(riddle, trackerReply);
-    if (!code) {
-      const extracted = await callAi(key, extractPrompt(trackerReply), riddle, false);
-      if (extracted.error && extracted.error.status !== 500) return extracted.error;
-      code = extracted.code;
+    trackerCode = quickTrackerCode(riddle, trackerReply);
+    if (!trackerCode) {
+      const read = await checkTwice(key, extractPrompt(trackerReply), riddle, false);
+      if (read.error) return read.error;
+      // The two readings disagree: take the one a database check also gave.
+      trackerCode = read.code ?? read.candidates.find((c) => fromDb.candidates.includes(c)) ?? null;
     }
-    if (!isUnknown(code)) {
-      console.log("solve: tracker", JSON.stringify({ riddle, trackerReply, answer: code }));
-      return { answer: code, error: null, status: 200, source: "tracker" };
-    }
+    if (trackerCode && !isUnknown(trackerCode)) return ok(trackerCode, "tracker", { trackerReply, db: fromDb.candidates });
   }
 
-  // Neither knows: Google Search.
-  const fromGoogle = await callAi(key, GOOGLE_PROMPT, riddle, true);
+  // Neither knows: Google Search, also checked twice.
+  const fromGoogle = await checkTwice(key, GOOGLE_PROMPT, riddle, true);
   if (fromGoogle.error) return fromGoogle.error;
-  if (!fromGoogle.code) return { answer: null, error: "No answer found", status: 422 };
-  console.log("solve: google", JSON.stringify({ riddle, trackerReply, answer: fromGoogle.code }));
-  return { answer: fromGoogle.code, error: null, status: 200, source: "google" };
+  const known = [...fromDb.candidates];
+  const googleCode =
+    fromGoogle.code ?? fromGoogle.candidates.find((c) => known.includes(c)) ?? fromGoogle.candidates[0] ?? fromDb.candidates[0];
+  if (!googleCode) return { answer: null, error: "No answer found", status: 422 };
+  return ok(googleCode, "google", { trackerReply, google: fromGoogle.candidates });
 }
