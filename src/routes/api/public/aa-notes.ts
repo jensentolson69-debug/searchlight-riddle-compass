@@ -5,8 +5,17 @@ import { createFileRoute } from "@tanstack/react-router";
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type",
+  "Access-Control-Allow-Headers": "Content-Type, x-delete-key",
 } as const;
+
+function keysMatch(provided: string, expected: string): boolean {
+  if (provided.length !== expected.length) return false;
+  let diff = 0;
+  for (let i = 0; i < expected.length; i++) {
+    diff |= provided.charCodeAt(i) ^ expected.charCodeAt(i);
+  }
+  return diff === 0;
+}
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -44,6 +53,14 @@ export const Route = createFileRoute("/api/public/aa-notes")({
         return json({ saved: true, note }, 201);
       },
       DELETE: async ({ request }) => {
+        const expectedKey = process.env["AA_NOTES_DELETE_KEY"]?.trim();
+        if (!expectedKey) {
+          return json({ error: "Delete key not configured" }, 503);
+        }
+        const providedKey = request.headers.get("x-delete-key")?.trim() ?? "";
+        if (!providedKey || !keysMatch(providedKey, expectedKey)) {
+          return json({ error: "Invalid delete key" }, 401);
+        }
         const url = new URL(request.url);
         const id = url.searchParams.get("id");
         const all = url.searchParams.get("all");

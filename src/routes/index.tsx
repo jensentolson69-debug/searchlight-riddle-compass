@@ -25,6 +25,8 @@ function Index() {
   const [notes, setNotes] = useState<AaNote[]>([]);
   const [noteInput, setNoteInput] = useState("");
   const [savingNote, setSavingNote] = useState(false);
+  const [ownerKey, setOwnerKey] = useState("");
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   async function fetchNotes() {
     try {
@@ -38,7 +40,16 @@ function Index() {
 
   useEffect(() => {
     void fetchNotes();
+    const savedKey = window.localStorage.getItem("sab_aa_delete_key");
+    if (savedKey) setOwnerKey(savedKey);
   }, []);
+
+  function onOwnerKeyChange(value: string) {
+    setOwnerKey(value);
+    setDeleteError(null);
+    if (value.trim()) window.localStorage.setItem("sab_aa_delete_key", value);
+    else window.localStorage.removeItem("sab_aa_delete_key");
+  }
 
   async function onAddNote(e: FormEvent) {
     e.preventDefault();
@@ -60,12 +71,30 @@ function Index() {
   }
 
   async function onDeleteNote(id: string) {
-    await fetch(`/api/public/aa-notes?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+    setDeleteError(null);
+    const res = await fetch(`/api/public/aa-notes?id=${encodeURIComponent(id)}`, {
+      method: "DELETE",
+      headers: { "x-delete-key": ownerKey.trim() },
+    });
+    if (!res.ok) {
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      setDeleteError(data.error ?? "Could not delete note");
+      return;
+    }
     setNotes((prev) => prev.filter((n) => n.id !== id));
   }
 
   async function onClearNotes() {
-    await fetch("/api/public/aa-notes?all=true", { method: "DELETE" });
+    setDeleteError(null);
+    const res = await fetch("/api/public/aa-notes?all=true", {
+      method: "DELETE",
+      headers: { "x-delete-key": ownerKey.trim() },
+    });
+    if (!res.ok) {
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      setDeleteError(data.error ?? "Could not clear notes");
+      return;
+    }
     setNotes([]);
   }
 
@@ -127,7 +156,7 @@ function Index() {
         <section className="mt-12 border-t border-border pt-6">
           <div className="flex items-center justify-between">
             <h2 className="text-xs uppercase tracking-widest text-primary">Live Admin Abuse Notes</h2>
-            {notes.length > 0 && (
+            {notes.length > 0 && ownerKey.trim() && (
               <button type="button" onClick={onClearNotes} className="text-xs text-muted-foreground hover:text-destructive">
                 Clear all
               </button>
@@ -154,18 +183,31 @@ function Index() {
             </button>
           </form>
 
+          <div className="mt-3 flex items-center gap-2">
+            <input
+              type="password"
+              value={ownerKey}
+              onChange={(e) => onOwnerKeyChange(e.target.value)}
+              placeholder="Owner key (required to delete notes)"
+              className="min-w-0 flex-1 rounded-lg border border-input bg-card px-3 py-1.5 text-xs text-card-foreground outline-none placeholder:text-muted-foreground focus:border-primary"
+            />
+          </div>
+          {deleteError && <p className="mt-2 text-xs text-destructive">{deleteError}</p>}
+
           {notes.length > 0 ? (
             <ul className="mt-4 space-y-2">
               {notes.map((n) => (
                 <li key={n.id} className="flex items-start justify-between gap-3 rounded-md border border-border bg-card px-3 py-2 text-xs">
                   <span className="break-words text-card-foreground">{n.content}</span>
-                  <button
-                    type="button"
-                    onClick={() => onDeleteNote(n.id)}
-                    className="shrink-0 text-muted-foreground hover:text-destructive"
-                  >
-                    ×
-                  </button>
+                  {ownerKey.trim() && (
+                    <button
+                      type="button"
+                      onClick={() => onDeleteNote(n.id)}
+                      className="shrink-0 text-muted-foreground hover:text-destructive"
+                    >
+                      ×
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>
