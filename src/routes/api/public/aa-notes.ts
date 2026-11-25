@@ -28,19 +28,38 @@ export const Route = createFileRoute("/api/public/aa-notes")({
   server: {
     handlers: {
       OPTIONS: async () => new Response(null, { status: 204, headers: CORS_HEADERS }),
-      GET: async () => {
+      GET: async ({ request }) => {
+        // Executors that can only do GET (game:HttpGet) save a note with ?message=...
+        const add = new URL(request.url).searchParams.get("message");
+        if (add !== null) {
+          const text = add.trim();
+          if (!text) return json({ error: "Missing message" }, 400);
+          if (text.length > 1000) return json({ error: "Message too long" }, 400);
+          const { addAaNote } = await import("@/lib/aa-notes.server");
+          const note = await addAaNote(text, "Sammy");
+          if (!note) return json({ error: "Could not save note" }, 500);
+          return json({ saved: true, note });
+        }
         const { listAaNotes } = await import("@/lib/aa-notes.server");
         const notes = await listAaNotes();
         return json({ notes });
       },
       POST: async ({ request }) => {
-        let body: unknown;
-        try {
-          body = await request.json();
-        } catch {
-          return json({ error: "Invalid JSON" }, 400);
+        // Accept JSON, form, or plain-text bodies (executors differ).
+        const rawText = (await request.text().catch(() => "")).trim();
+        let obj: Record<string, unknown> = {};
+        if (rawText.startsWith("{")) {
+          try {
+            const parsed: unknown = JSON.parse(rawText);
+            if (parsed && typeof parsed === "object") obj = parsed as Record<string, unknown>;
+          } catch {
+            return json({ error: "Invalid JSON" }, 400);
+          }
+        } else if (/^[a-z]+=/i.test(rawText)) {
+          obj = Object.fromEntries(new URLSearchParams(rawText));
+        } else if (rawText) {
+          obj = { message: rawText };
         }
-        const obj = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
         const raw = obj["message"] ?? obj["text"] ?? obj["content"];
         if (typeof raw !== "string" || raw.trim() === "") {
           return json({ error: "Missing message" }, 400);
@@ -50,7 +69,7 @@ export const Route = createFileRoute("/api/public/aa-notes")({
         const { addAaNote } = await import("@/lib/aa-notes.server");
         const note = await addAaNote(raw, source);
         if (!note) return json({ error: "Could not save note" }, 500);
-        return json({ saved: true, note }, 201);
+        return json({ saved: true, note });
       },
       DELETE: async ({ request }) => {
         const expectedKey = process.env["AA_NOTES_DELETE_KEY"]?.trim();

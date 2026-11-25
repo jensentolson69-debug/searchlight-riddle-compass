@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiSolveRouteImport } from './routes/api/solve'
 import { Route as ApiPublicAaNotesRouteImport } from './routes/api/public/aa-notes'
+import { Route as ApiPublicScriptDotluaRouteImport } from './routes/api/public/script[.]lua'
 import { Route as ApiPublicSolveRouteImport } from './routes/api/public/solve'
 
 const IndexRoute = IndexRouteImport.update({
@@ -29,6 +30,11 @@ const ApiPublicAaNotesRoute = ApiPublicAaNotesRouteImport.update({
   path: '/api/public/aa-notes',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicScriptDotluaRoute = ApiPublicScriptDotluaRouteImport.update({
+  id: '/api/public/script.lua',
+  path: '/api/public/script.lua',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicSolveRoute = ApiPublicSolveRouteImport.update({
   id: '/api/public/solve',
   path: '/api/public/solve',
@@ -39,12 +45,14 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/api/solve': typeof ApiSolveRoute
   '/api/public/aa-notes': typeof ApiPublicAaNotesRoute
+  '/api/public/script.lua': typeof ApiPublicScriptDotluaRoute
   '/api/public/solve': typeof ApiPublicSolveRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/api/solve': typeof ApiSolveRoute
   '/api/public/aa-notes': typeof ApiPublicAaNotesRoute
+  '/api/public/script.lua': typeof ApiPublicScriptDotluaRoute
   '/api/public/solve': typeof ApiPublicSolveRoute
 }
 export interface FileRoutesById {
@@ -52,18 +60,30 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/api/solve': typeof ApiSolveRoute
   '/api/public/aa-notes': typeof ApiPublicAaNotesRoute
+  '/api/public/script.lua': typeof ApiPublicScriptDotluaRoute
   '/api/public/solve': typeof ApiPublicSolveRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api/solve' | '/api/public/aa-notes' | '/api/public/solve'
+  fullPaths:
+    | '/'
+    | '/api/solve'
+    | '/api/public/aa-notes'
+    | '/api/public/script.lua'
+    | '/api/public/solve'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/solve' | '/api/public/aa-notes' | '/api/public/solve'
+  to:
+    | '/'
+    | '/api/solve'
+    | '/api/public/aa-notes'
+    | '/api/public/script.lua'
+    | '/api/public/solve'
   id:
     | '__root__'
     | '/'
     | '/api/solve'
     | '/api/public/aa-notes'
+    | '/api/public/script.lua'
     | '/api/public/solve'
   fileRoutesById: FileRoutesById
 }
@@ -71,6 +91,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ApiSolveRoute: typeof ApiSolveRoute
   ApiPublicAaNotesRoute: typeof ApiPublicAaNotesRoute
+  ApiPublicScriptDotluaRoute: typeof ApiPublicScriptDotluaRoute
   ApiPublicSolveRoute: typeof ApiPublicSolveRoute
 }
 
@@ -97,6 +118,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicAaNotesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/script.lua': {
+      id: '/api/public/script.lua'
+      path: '/api/public/script.lua'
+      fullPath: '/api/public/script.lua'
+      preLoaderRoute: typeof ApiPublicScriptDotluaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/solve': {
       id: '/api/public/solve'
       path: '/api/public/solve'
@@ -111,6 +139,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ApiSolveRoute: ApiSolveRoute,
   ApiPublicAaNotesRoute: ApiPublicAaNotesRoute,
+  ApiPublicScriptDotluaRoute: ApiPublicScriptDotluaRoute,
   ApiPublicSolveRoute: ApiPublicSolveRoute,
 }
 export const routeTree = rootRouteImport
