@@ -1,5 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
+
+type AaNote = { id: string; content: string; source: string; created_at: string };
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -20,6 +22,52 @@ function Index() {
   const [answer, setAnswer] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [notes, setNotes] = useState<AaNote[]>([]);
+  const [noteInput, setNoteInput] = useState("");
+  const [savingNote, setSavingNote] = useState(false);
+
+  async function fetchNotes() {
+    try {
+      const res = await fetch("/api/public/aa-notes");
+      const data = (await res.json()) as { notes?: AaNote[] };
+      if (data.notes) setNotes(data.notes);
+    } catch {
+      // ignore transient load error
+    }
+  }
+
+  useEffect(() => {
+    void fetchNotes();
+  }, []);
+
+  async function onAddNote(e: FormEvent) {
+    e.preventDefault();
+    if (!noteInput.trim() || savingNote) return;
+    setSavingNote(true);
+    try {
+      const res = await fetch("/api/public/aa-notes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: noteInput.trim(), source: "manual" }),
+      });
+      if (res.ok) {
+        setNoteInput("");
+        await fetchNotes();
+      }
+    } finally {
+      setSavingNote(false);
+    }
+  }
+
+  async function onDeleteNote(id: string) {
+    await fetch(`/api/public/aa-notes?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+    setNotes((prev) => prev.filter((n) => n.id !== id));
+  }
+
+  async function onClearNotes() {
+    await fetch("/api/public/aa-notes?all=true", { method: "DELETE" });
+    setNotes([]);
+  }
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -76,11 +124,64 @@ function Index() {
         )}
         {error && <p className="mt-6 text-sm text-destructive">{error}</p>}
 
+        <section className="mt-12 border-t border-border pt-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xs uppercase tracking-widest text-primary">Live Admin Abuse Notes</h2>
+            {notes.length > 0 && (
+              <button type="button" onClick={onClearNotes} className="text-xs text-muted-foreground hover:text-destructive">
+                Clear all
+              </button>
+            )}
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Saved automatically from your script during Admin Abuse, or add facts Sammy mentions here.
+          </p>
+
+          <form onSubmit={onAddNote} className="mt-3 flex gap-2">
+            <input
+              value={noteInput}
+              onChange={(e) => setNoteInput(e.target.value)}
+              maxLength={1000}
+              placeholder="Sammy said: new mutation is Cosmic..."
+              className="min-w-0 flex-1 rounded-lg border border-input bg-card px-3 py-2 text-sm text-card-foreground outline-none placeholder:text-muted-foreground focus:border-primary"
+            />
+            <button
+              type="submit"
+              disabled={savingNote || !noteInput.trim()}
+              className="rounded-lg bg-primary px-4 py-2 text-xs font-bold uppercase tracking-widest text-primary-foreground transition hover:brightness-110 disabled:opacity-40"
+            >
+              {savingNote ? "Saving…" : "Save"}
+            </button>
+          </form>
+
+          {notes.length > 0 ? (
+            <ul className="mt-4 space-y-2">
+              {notes.map((n) => (
+                <li key={n.id} className="flex items-start justify-between gap-3 rounded-md border border-border bg-card px-3 py-2 text-xs">
+                  <span className="break-words text-card-foreground">{n.content}</span>
+                  <button
+                    type="button"
+                    onClick={() => onDeleteNote(n.id)}
+                    className="shrink-0 text-muted-foreground hover:text-destructive"
+                  >
+                    ×
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-3 text-xs text-muted-foreground">No Admin Abuse notes saved yet.</p>
+          )}
+        </section>
+
         <div className="mt-12 border-t border-border pt-6 text-xs text-muted-foreground">
           <p className="uppercase tracking-widest">API</p>
           <pre className="mt-2 overflow-x-auto rounded-md bg-muted p-3 text-muted-foreground">
-{`POST /api/solve
-{ "riddle": "..." }  →  { "answer": "CODE" }`}
+{`POST /api/public/solve
+{ "riddle": "..." }  →  { "answer": "CODE" }
+
+POST /api/public/aa-notes
+{ "message": "Sammy said..." }  →  { "saved": true }`}
           </pre>
         </div>
       </div>

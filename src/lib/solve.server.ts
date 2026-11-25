@@ -8,6 +8,7 @@
 //   - Otherwise the website AI's answer is used (short replies need no extra AI call).
 //   - Only if both fail, ask Gemini with live Google Search.
 import { cleanAnswer } from "./solve-answer";
+import { loadAaNotesText } from "./aa-notes.server";
 import { askTracker } from "./tracker.server";
 import { TRACKER_DATABASE } from "./tracker-database.server";
 import { isUnknown, quickTrackerCode } from "./tracker-reply";
@@ -101,13 +102,17 @@ ${OWN_FACTS}
 
 const CONFIRMED = `"best brainrot" = STRAWBERRYELEPHANT. Sammy's favourite/favorite brainrot = MEOWL (not STRAWBERRYELEPHANT). Sammy's cat = NOVA. Sammy's age = 24. Sammy's username = SPYDERSAMMY. Sammy's favourite mutation = YINGYANG (spelled exactly YINGYANG).`;
 
-/** Database check: the user's own list + the tracker website's Database tab. Says UNKNOWN when unsure. */
-const DATABASE_PROMPT = `You turn riddles about the Roblox game "Steal a Brainrot" (SAB) and its creator Sammy (SpyderSammy) into a code.
+/** Database check: confirmed overrides + live Admin Abuse notes + user's list + tracker Database. */
+function buildDatabasePrompt(aaNotes: string): string {
+  const aaSection = aaNotes
+    ? `\n\n=== LIVE ADMIN ABUSE NOTES (Sammy talking in-game about new updates/stuff — newest facts) ===\n${aaNotes}`
+    : "";
+  return `You turn riddles about the Roblox game "Steal a Brainrot" (SAB) and its creator Sammy (SpyderSammy) into a code.
 The riddle is written as if Sammy is speaking ("my cat" = Sammy's cat, "my age" = Sammy's age).
 
 Sources, in priority order:
 A. CONFIRMED OVERRIDES (always win): ${CONFIRMED}
-B. THE USER'S OWN FACTS (below) — when they disagree with C, B wins.
+B. LIVE ADMIN ABUSE NOTES & THE USER'S OWN FACTS (below) — when they disagree with C, B wins.
 C. THE TRACKER WEBSITE'S DATABASE (below).
 
 Rules:
@@ -116,12 +121,19 @@ Rules:
 3. Numbers stay as digits (24, not TWENTYFOUR) unless the source writes them as words.
 4. If ANY part is not clearly answered by sources A–C, reply exactly UNKNOWN. Never guess.
 5. Reply with ONLY the code in UPPERCASE: letters and digits, no spaces, no punctuation, no explanation.
+${aaSection}
 
 === B. THE USER'S OWN FACTS ===
 ${OWN_FACTS}
 
 === C. TRACKER WEBSITE DATABASE ===
 ${TRACKER_DATABASE}`;
+}
+
+function buildGooglePrompt(aaNotes: string): string {
+  if (!aaNotes) return GOOGLE_PROMPT;
+  return `${GOOGLE_PROMPT}\n\n=== LIVE ADMIN ABUSE NOTES (from Sammy in-game) ===\n${aaNotes}`;
+}
 
 /** Small, fast prompt that turns the tracker website AI's sentence into a code. */
 function extractPrompt(trackerReply: string): string {
@@ -217,7 +229,8 @@ export async function solveRiddle(riddle: string): Promise<SolveResult> {
 
   // Ask the website AI and check the database (twice, in parallel) at the same time.
   const trackerReplyPromise = askTracker(riddle);
-  const fromDb = await checkTwice(key, DATABASE_PROMPT, riddle, false);
+  const aaNotes = await loadAaNotesText();
+  const fromDb = await checkTwice(key, buildDatabasePrompt(aaNotes), riddle, false);
   if (fromDb.error) return fromDb.error;
 
   // Both database checks agree: it wins even over the website AI, so send it right away.
@@ -238,7 +251,7 @@ export async function solveRiddle(riddle: string): Promise<SolveResult> {
   }
 
   // Neither knows: Google Search, also checked twice.
-  const fromGoogle = await checkTwice(key, GOOGLE_PROMPT, riddle, true);
+  const fromGoogle = await checkTwice(key, buildGooglePrompt(aaNotes), riddle, true);
   if (fromGoogle.error) return fromGoogle.error;
   const known = [...fromDb.candidates];
   const googleCode =

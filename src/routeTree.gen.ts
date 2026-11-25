@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiSolveRouteImport } from './routes/api/solve'
+import { Route as ApiPublicAaNotesRouteImport } from './routes/api/public/aa-notes'
 import { Route as ApiPublicSolveRouteImport } from './routes/api/public/solve'
 
 const IndexRoute = IndexRouteImport.update({
@@ -23,6 +24,11 @@ const ApiSolveRoute = ApiSolveRouteImport.update({
   path: '/api/solve',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicAaNotesRoute = ApiPublicAaNotesRouteImport.update({
+  id: '/api/public/aa-notes',
+  path: '/api/public/aa-notes',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicSolveRoute = ApiPublicSolveRouteImport.update({
   id: '/api/public/solve',
   path: '/api/public/solve',
@@ -32,30 +38,39 @@ const ApiPublicSolveRoute = ApiPublicSolveRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/api/solve': typeof ApiSolveRoute
+  '/api/public/aa-notes': typeof ApiPublicAaNotesRoute
   '/api/public/solve': typeof ApiPublicSolveRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/api/solve': typeof ApiSolveRoute
+  '/api/public/aa-notes': typeof ApiPublicAaNotesRoute
   '/api/public/solve': typeof ApiPublicSolveRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/api/solve': typeof ApiSolveRoute
+  '/api/public/aa-notes': typeof ApiPublicAaNotesRoute
   '/api/public/solve': typeof ApiPublicSolveRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api/solve' | '/api/public/solve'
+  fullPaths: '/' | '/api/solve' | '/api/public/aa-notes' | '/api/public/solve'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/solve' | '/api/public/solve'
-  id: '__root__' | '/' | '/api/solve' | '/api/public/solve'
+  to: '/' | '/api/solve' | '/api/public/aa-notes' | '/api/public/solve'
+  id:
+    | '__root__'
+    | '/'
+    | '/api/solve'
+    | '/api/public/aa-notes'
+    | '/api/public/solve'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ApiSolveRoute: typeof ApiSolveRoute
+  ApiPublicAaNotesRoute: typeof ApiPublicAaNotesRoute
   ApiPublicSolveRoute: typeof ApiPublicSolveRoute
 }
 
@@ -75,6 +90,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiSolveRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/aa-notes': {
+      id: '/api/public/aa-notes'
+      path: '/api/public/aa-notes'
+      fullPath: '/api/public/aa-notes'
+      preLoaderRoute: typeof ApiPublicAaNotesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/solve': {
       id: '/api/public/solve'
       path: '/api/public/solve'
@@ -88,6 +110,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ApiSolveRoute: ApiSolveRoute,
+  ApiPublicAaNotesRoute: ApiPublicAaNotesRoute,
   ApiPublicSolveRoute: ApiPublicSolveRoute,
 }
 export const routeTree = rootRouteImport
