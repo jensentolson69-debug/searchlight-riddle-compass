@@ -99,7 +99,7 @@ ${OWN_FACTS}
 4. Answer ONLY in UPPERCASE, no spaces, no punctuation.
 5. Return ONLY the answer, nothing else.`;
 
-const CONFIRMED = `"best brainrot" = STRAWBERRYELEPHANT. Sammy's cat = NOVA. Sammy's age = 24. Sammy's username = SPYDERSAMMY. Sammy's favourite mutation = YINGYANG (spelled exactly YINGYANG).`;
+const CONFIRMED = `"best brainrot" = STRAWBERRYELEPHANT. Sammy's favourite/favorite brainrot = MEOWL (not STRAWBERRYELEPHANT). Sammy's cat = NOVA. Sammy's age = 24. Sammy's username = SPYDERSAMMY. Sammy's favourite mutation = YINGYANG (spelled exactly YINGYANG).`;
 
 /** Database check: the user's own list + the tracker website's Database tab. Says UNKNOWN when unsure. */
 const DATABASE_PROMPT = `You turn riddles about the Roblox game "Steal a Brainrot" (SAB) and its creator Sammy (SpyderSammy) into a code.
