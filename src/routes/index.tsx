@@ -53,18 +53,22 @@ function Index() {
 
   async function onAddNote(e: FormEvent) {
     e.preventDefault();
-    if (!noteInput.trim() || savingNote) return;
+    if (!noteInput.trim() || !ownerKey.trim() || savingNote) return;
+    setDeleteError(null);
     setSavingNote(true);
     try {
       const res = await fetch("/api/public/aa-notes", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-owner-key": ownerKey.trim() },
         body: JSON.stringify({ message: noteInput.trim(), source: "manual" }),
       });
-      if (res.ok) {
-        setNoteInput("");
-        await fetchNotes();
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        setDeleteError(data.error ?? "Could not save note");
+        return;
       }
+      setNoteInput("");
+      await fetchNotes();
     } finally {
       setSavingNote(false);
     }
@@ -176,7 +180,7 @@ function Index() {
             />
             <button
               type="submit"
-              disabled={savingNote || !noteInput.trim()}
+              disabled={savingNote || !noteInput.trim() || !ownerKey.trim()}
               className="rounded-lg bg-primary px-4 py-2 text-xs font-bold uppercase tracking-widest text-primary-foreground transition hover:brightness-110 disabled:opacity-40"
             >
               {savingNote ? "Saving…" : "Save"}
@@ -188,7 +192,7 @@ function Index() {
               type="password"
               value={ownerKey}
               onChange={(e) => onOwnerKeyChange(e.target.value)}
-              placeholder="Owner key (required to delete notes)"
+              placeholder="Owner key (required to add or delete notes)"
               className="min-w-0 flex-1 rounded-lg border border-input bg-card px-3 py-1.5 text-xs text-card-foreground outline-none placeholder:text-muted-foreground focus:border-primary"
             />
           </div>

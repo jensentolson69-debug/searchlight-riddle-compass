@@ -5,7 +5,7 @@ import { createFileRoute } from "@tanstack/react-router";
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, x-delete-key",
+  "Access-Control-Allow-Headers": "Content-Type, x-delete-key, x-owner-key",
 } as const;
 
 function keysMatch(provided: string, expected: string): boolean {
@@ -24,6 +24,23 @@ function json(data: unknown, status = 200): Response {
   });
 }
 
+function requireOwnerKey(request: Request, bodyKey?: unknown): Response | null {
+  const expectedKey = process.env["AA_NOTES_DELETE_KEY"]?.trim();
+  if (!expectedKey) {
+    return json({ error: "Owner key not configured" }, 503);
+  }
+  const url = new URL(request.url);
+  const providedKey =
+    request.headers.get("x-owner-key")?.trim() ||
+    request.headers.get("x-delete-key")?.trim() ||
+    url.searchParams.get("key")?.trim() ||
+    (typeof bodyKey === "string" ? bodyKey.trim() : "");
+  if (!providedKey || !keysMatch(providedKey, expectedKey)) {
+    return json({ error: "Invalid owner key" }, 401);
+  }
+  return null;
+}
+
 export const Route = createFileRoute("/api/public/aa-notes")({
   server: {
     handlers: {
@@ -32,6 +49,8 @@ export const Route = createFileRoute("/api/public/aa-notes")({
         // Executors that can only do GET (game:HttpGet) save a note with ?message=...
         const add = new URL(request.url).searchParams.get("message");
         if (add !== null) {
+          const authError = requireOwnerKey(request);
+          if (authError) return authError;
           const text = add.trim();
           if (!text) return json({ error: "Missing message" }, 400);
           if (text.length > 1000) return json({ error: "Message too long" }, 400);
@@ -60,6 +79,8 @@ export const Route = createFileRoute("/api/public/aa-notes")({
         } else if (rawText) {
           obj = { message: rawText };
         }
+        const authError = requireOwnerKey(request, obj["key"]);
+        if (authError) return authError;
         const raw = obj["message"] ?? obj["text"] ?? obj["content"];
         if (typeof raw !== "string" || raw.trim() === "") {
           return json({ error: "Missing message" }, 400);
@@ -72,14 +93,8 @@ export const Route = createFileRoute("/api/public/aa-notes")({
         return json({ saved: true, note });
       },
       DELETE: async ({ request }) => {
-        const expectedKey = process.env["AA_NOTES_DELETE_KEY"]?.trim();
-        if (!expectedKey) {
-          return json({ error: "Delete key not configured" }, 503);
-        }
-        const providedKey = request.headers.get("x-delete-key")?.trim() ?? "";
-        if (!providedKey || !keysMatch(providedKey, expectedKey)) {
-          return json({ error: "Invalid delete key" }, 401);
-        }
+        const authError = requireOwnerKey(request);
+        if (authError) return authError;
         const url = new URL(request.url);
         const id = url.searchParams.get("id");
         const all = url.searchParams.get("all");
