@@ -31,6 +31,7 @@ use the editor.
 
 ## Project rules
 
+- Keep solve response compatibility fields in the shared `solve-handler.ts`: successful replies expose `success`, `answer`, `code`, `result`, and `response`; failures expose `success: false` and `error` — both solve URLs must serve the same contract for Lua clients.
 - Riddle-solving logic lives in `src/lib/solve.server.ts` and is loaded with a dynamic import inside the `/api/solve` handler — keeps the AI key and prompt out of the browser bundle.
 - Answer normalisation is a pure helper (`src/lib/solve-answer.ts`) covered by `src/test/solve-answer.test.ts` — change both together.
 - Riddle lookup in `solve.server.ts`: tracker site Ask AI (`tracker.server.ts`) and a database check (user facts + `tracker-database.server.ts`) start in parallel; every AI step runs twice in parallel on two models (`checkTwice`) and an answer counts only when both agree (else a candidate matching another source). Agreed database answer returns at once, else the tracker reply (short ones parsed without AI via `quickTrackerCode`), else Gemini with Google Search; covered by `src/test/solve-cascade.test.ts` — fast, double-checked, Google last.

@@ -54,18 +54,19 @@ export async function readRiddle(request: Request): Promise<string | undefined> 
 export async function handleSolve(request: Request): Promise<Response> {
   const riddle = await readRiddle(request);
   if (typeof riddle !== "string" || riddle.trim() === "") {
-    return json({ error: "Missing riddle" }, 400);
+    return json({ success: false, error: "Missing riddle" }, 400);
   }
-  if (riddle.length > 1000) return json({ error: "Riddle too long" }, 400);
+  if (riddle.length > 1000) return json({ success: false, error: "Riddle too long" }, 400);
 
   try {
     const { solveRiddle } = await import("@/lib/solve.server");
     const result = await solveRiddle(riddle.trim());
-    if (result.error) return json({ error: result.error }, result.status);
-    return json({ answer: result.answer });
+    if (result.error) return json({ success: false, error: result.error }, result.status);
+    const answer = result.answer;
+    return json({ success: true, answer, code: answer, result: answer, response: answer });
   } catch (e) {
     console.error("solve failed", e);
-    return json({ error: "Server error" }, 500);
+    return json({ success: false, error: "Server error" }, 500);
   }
 }
 
