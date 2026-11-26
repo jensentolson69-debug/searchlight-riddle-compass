@@ -85,6 +85,8 @@ FIRST UPDATE: MUTATIONS
 BEST BRAINROT: STRAWBERRYELEPHANT
 BEST MUTATION: HACKER
 BEST BRAINROT FROM A SECRET LUCKY BLOCK: CELESTIALPEGASUS
+BRAINROT THAT IS RED AND LOOKS SCARED: CHACHECHI
+BRAINROT FROM A SECRET LUCKY BLOCK THAT GOT NERFED LAST TIME: LASECRETCOMBINASION
 STRONGEST BRAINROT (HIGHEST INCOME): SPYDERELEPHANT
 RAREST BRAINROT: SPYDERELEPHANT
 UNOBTAINABLE: HEADLESSHORSEMAN
@@ -102,7 +104,7 @@ ${OWN_FACTS}
 4. Answer ONLY in UPPERCASE, no spaces, no punctuation.
 5. Return ONLY the answer, nothing else.`;
 
-const CONFIRMED = `"best brainrot" = STRAWBERRYELEPHANT. "best mutation" = HACKER (not YINGYANG). Best brainrot from a Secret Lucky Block = CELESTIALPEGASUS. Sammy's favourite/favorite brainrot = MEOWL (not STRAWBERRYELEPHANT). Sammy's cat = NOVA. Sammy's age = 24. Sammy's username = SPYDERSAMMY. Sammy's favourite mutation = YINGYANG (spelled exactly YINGYANG).`;
+const CONFIRMED = `"best brainrot" = STRAWBERRYELEPHANT. "best mutation" = HACKER (not YINGYANG). Best brainrot from a Secret Lucky Block = CELESTIALPEGASUS. Brainrot that is red and looks scared = CHACHECHI. Brainrot from a Secret Lucky Block that got nerfed last time = LASECRETCOMBINASION. Sammy's favourite/favorite brainrot = MEOWL (not STRAWBERRYELEPHANT). Sammy's cat = NOVA. Sammy's age = 24. Sammy's username = SPYDERSAMMY. Sammy's favourite mutation = YINGYANG (spelled exactly YINGYANG).`;
 
 /** Database check: confirmed overrides + live Admin Abuse notes + user's list + tracker Database. */
 function buildDatabasePrompt(aaNotes: string): string {
