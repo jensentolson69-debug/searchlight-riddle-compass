@@ -58,7 +58,7 @@ FAVORITE MUTATION: YINGYANG
 === MUTATIONS (IN ORDER) ===
 1: GOLD, 2: DIAMOND, 3: BLOODROT, 4: RAINBOW, 5: CANDY
 6: LAVA, 7: GALAXY, 8: YINYANG, 9: RADIOACTIVE, 10: CURSED
-11: DIVINE, 12: CYBER, 13: PHANTOM, 14: CRYSTAL
+11: DIVINE, 12: CYBER, 13: PHANTOM, 14: CRYSTAL, 15: ECLIPSE, 16: HACKER
 
 === MACHINES (IN ORDER) ===
 1: RAINBOWMACHINE, 2: BUBBLEGUMMACHINE, 3: FUSEMACHINE, 4: CRAFTMACHINE
@@ -83,6 +83,7 @@ MAX PLAYERS: 8
 GAME TYPE: SIMULATOR
 FIRST UPDATE: MUTATIONS
 BEST BRAINROT: STRAWBERRYELEPHANT
+BEST MUTATION: HACKER
 STRONGEST BRAINROT (HIGHEST INCOME): SPYDERELEPHANT
 RAREST BRAINROT: SPYDERELEPHANT
 UNOBTAINABLE: HEADLESSHORSEMAN
@@ -100,7 +101,7 @@ ${OWN_FACTS}
 4. Answer ONLY in UPPERCASE, no spaces, no punctuation.
 5. Return ONLY the answer, nothing else.`;
 
-const CONFIRMED = `"best brainrot" = STRAWBERRYELEPHANT. Sammy's favourite/favorite brainrot = MEOWL (not STRAWBERRYELEPHANT). Sammy's cat = NOVA. Sammy's age = 24. Sammy's username = SPYDERSAMMY. Sammy's favourite mutation = YINGYANG (spelled exactly YINGYANG).`;
+const CONFIRMED = `"best brainrot" = STRAWBERRYELEPHANT. "best mutation" = HACKER (not YINGYANG). Sammy's favourite/favorite brainrot = MEOWL (not STRAWBERRYELEPHANT). Sammy's cat = NOVA. Sammy's age = 24. Sammy's username = SPYDERSAMMY. Sammy's favourite mutation = YINGYANG (spelled exactly YINGYANG).`;
 
 /** Database check: confirmed overrides + live Admin Abuse notes + user's list + tracker Database. */
 function buildDatabasePrompt(aaNotes: string): string {
