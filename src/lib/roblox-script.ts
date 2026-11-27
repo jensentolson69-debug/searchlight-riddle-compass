@@ -99,6 +99,127 @@ local function redeemAnswer(code)
 end
 
 -- ============================================================
+-- WATCH FOR A BRAINROT SPAWN (confirms the riddle was right)
+-- ============================================================
+local function isOwnedByLocalPlayer(inst, lp)
+    local cur = inst
+    local depth = 0
+    while cur and cur ~= workspace and cur ~= game and depth < 8 do
+        depth = depth + 1
+        local name = string.lower(cur.Name)
+        if name == string.lower(lp.Name) or string.find(name, string.lower(lp.Name), 1, true) then
+            return true
+        end
+        local okAttr, owner = pcall(function()
+            return cur:GetAttribute("Owner") or cur:GetAttribute("OwnerName") or cur:GetAttribute("Player")
+                or cur:GetAttribute("OwnerId") or cur:GetAttribute("UserId")
+        end)
+        if okAttr and owner ~= nil then
+            if owner == lp.Name or owner == lp.UserId or tostring(owner) == tostring(lp.UserId) then
+                return true
+            end
+        end
+        local ownerVal = cur:FindFirstChild("Owner") or cur:FindFirstChild("OwnerId") or cur:FindFirstChild("Player")
+        if ownerVal and ownerVal:IsA("ValueBase") then
+            local v = ownerVal.Value
+            if v == lp or v == lp.Name or v == lp.UserId then
+                return true
+            end
+        end
+        cur = cur.Parent
+    end
+    return false
+end
+
+local function looksLikeBrainrotModel(inst, lp)
+    if not inst:IsA("Model") then return false end
+    if Players:GetPlayerFromCharacter(inst) then return false end
+    if isOwnedByLocalPlayer(inst, lp) then return true end
+    local okAttr, hasBrainrotAttr = pcall(function()
+        return inst:GetAttribute("Rarity") ~= nil
+            or inst:GetAttribute("Mutation") ~= nil
+            or inst:GetAttribute("Income") ~= nil
+            or inst:GetAttribute("Generation") ~= nil
+            or inst:GetAttribute("Brainrot") ~= nil
+    end)
+    if okAttr and hasBrainrotAttr then return true end
+    local parentName = inst.Parent and string.lower(inst.Parent.Name) or ""
+    if string.find(parentName, "brainrot", 1, true)
+        or string.find(parentName, "animal", 1, true)
+        or string.find(parentName, "spawn", 1, true)
+        or string.find(parentName, "podium", 1, true)
+        or string.find(parentName, "plot", 1, true) then
+        return true
+    end
+    return false
+end
+
+local function watchForBrainrotSpawn(code, timeoutSeconds)
+    local lp = Players.LocalPlayer
+    if not lp then return end
+    local conns = {}
+    local confirmed = false
+
+    local function cleanup()
+        for _, c in ipairs(conns) do
+            pcall(function() c:Disconnect() end)
+        end
+        conns = {}
+    end
+
+    local function confirm(reason)
+        if confirmed then return end
+        confirmed = true
+        cleanup()
+        print("[AI Solver] Confirmed (" .. reason .. "), saving answer to database...")
+        task.spawn(function() G.confirmRiddle(code, true) end)
+    end
+
+    table.insert(conns, workspace.DescendantAdded:Connect(function(inst)
+        if confirmed then return end
+        if looksLikeBrainrotModel(inst, lp) then
+            confirm("brainrot spawned: " .. inst.Name)
+        end
+    end))
+
+    local backpack = lp:FindFirstChildOfClass("Backpack")
+    if backpack then
+        table.insert(conns, backpack.ChildAdded:Connect(function(inst)
+            if not confirmed and inst:IsA("Tool") then
+                confirm("tool received: " .. inst.Name)
+            end
+        end))
+    end
+
+    local pg = lp:FindFirstChildOfClass("PlayerGui")
+    if pg then
+        table.insert(conns, pg.DescendantAdded:Connect(function(inst)
+            if confirmed then return end
+            if not (inst:IsA("TextLabel") or inst:IsA("TextButton")) then return end
+            local ok, text = pcall(function() return string.lower(inst.Text or "") end)
+            if not ok or text == "" then return end
+            if string.find(text, "wrong", 1, true)
+                or string.find(text, "invalid", 1, true)
+                or string.find(text, "expired", 1, true)
+                or string.find(text, "already", 1, true)
+                or string.find(text, "fail", 1, true)
+                or string.find(text, "incorrect", 1, true) then
+                return
+            end
+            if string.find(text, "redeem", 1, true)
+                or string.find(text, "spawned", 1, true)
+                or string.find(text, "correct", 1, true)
+                or string.find(text, "claimed", 1, true)
+                or string.find(text, "unlocked", 1, true) then
+                confirm("game notification")
+            end
+        end))
+    end
+
+    task.delay(timeoutSeconds or 8, cleanup)
+end
+
+-- ============================================================
 -- SOLVE A RIDDLE (returns the code, or nil)
 -- ============================================================
 G.solveRiddle = function(riddleText)
@@ -122,7 +243,11 @@ local function handleRiddle(riddleText)
         local code = G.solveRiddle(riddleText)
         if code then
             print("[AI Solver] Answer: " .. code)
-            if redeemAnswer(code) then G.confirmRiddle(code, true) end
+            if redeemAnswer(code) then
+                G.confirmRiddle(code, true)
+            else
+                watchForBrainrotSpawn(code, 8)
+            end
         end
     end)
 end
