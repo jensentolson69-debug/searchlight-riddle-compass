@@ -15,6 +15,13 @@
       "when": 1795644961769,
       "tag": "0001_lock_aa_notes_delete",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1795744423179,
+      "tag": "0002_riddle_cache_and_tracker_sync",
+      "breakpoints": true
     }
   ]
 }

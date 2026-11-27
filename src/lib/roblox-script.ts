@@ -14,12 +14,15 @@ local G = (getgenv and getgenv()) or _G
 local BASE_URL = "${baseUrl}"
 local SOLVE_URL = BASE_URL .. "/api/public/solve"
 local NOTES_URL = BASE_URL .. "/api/public/aa-notes"
+local CONFIRM_URL = BASE_URL .. "/api/public/confirm-riddle"
+local pending = {}
 
 local rawRequest = (syn and syn.request) or (http and http.request) or http_request or request or (fluxus and fluxus.request)
 
 -- Turn any reply text into a Lua table (or nil). Never errors.
 local function decode(body)
     if type(body) ~= "string" or body == "" then return nil end
+    body = body:gsub("^%s+", "")
     if string.sub(body, 1, 1) ~= "{" then return nil end
     local ok, data = pcall(function() return HttpService:JSONDecode(body) end)
     if ok and type(data) == "table" then return data end
@@ -28,6 +31,7 @@ end
 
 -- GET a URL and return the decoded JSON. Tries game:HttpGet, then request().
 local function getJson(url)
+    url = url .. (string.find(url, "?", 1, true) and "&" or "?") .. "_t=" .. tostring(os.time()) .. tostring(math.random(1000, 9999))
     local ok, body = pcall(function() return game:HttpGet(url, true) end)
     if ok then
         local data = decode(body)
@@ -41,6 +45,22 @@ local function getJson(url)
         end
     end
     return nil
+end
+
+-- Call this ONLY when Roblox reports that the code was successfully redeemed.
+-- A sent request, typed code, or HTTP 200 is not proof of a correct riddle.
+G.confirmRiddle = function(code, redeemed)
+    if redeemed ~= true then return false end
+    local ticket = pending[tostring(code)]
+    if not ticket then return false end
+    local result = getJson(CONFIRM_URL .. "?redeemed=true&confirmation=" .. HttpService:UrlEncode(ticket))
+    if result and result.saved == true then
+        pending[tostring(code)] = nil
+        print("[AI Solver] Correct answer saved for faster future riddles")
+        return true
+    end
+    warn("[AI Solver] Could not save correct answer: " .. tostring(result and result.error or "no reply"))
+    return false
 end
 
 -- ============================================================
@@ -57,17 +77,16 @@ end
 -- ============================================================
 local function redeemAnswer(code)
     print("[AI Solver] Redeeming: " .. tostring(code))
-    pcall(function()
+    local ok, result = pcall(function()
         local remote = ReplicatedStorage:FindFirstChild("RedeemCode", true)
             or ReplicatedStorage:FindFirstChild("ClaimCode", true)
             or ReplicatedStorage:FindFirstChild("EnterCode", true)
         if remote and remote:IsA("RemoteEvent") then
             remote:FireServer(code)
+            return nil
         elseif remote and remote:IsA("RemoteFunction") then
-            remote:InvokeServer(code)
+            return remote:InvokeServer(code)
         end
-    end)
-    pcall(function()
         if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
             local ch = TextChatService.TextChannels:FindFirstChild("RBXGeneral")
             if ch then ch:SendAsync(code) end
@@ -75,6 +94,8 @@ local function redeemAnswer(code)
             ReplicatedStorage.DefaultChatSystemChatEvents.SayMessageRequest:FireServer(code, "All")
         end
     end)
+    -- Only explicit success from the game counts, never pcall success alone.
+    return ok and type(result) == "table" and (result.success == true or result.Success == true)
 end
 
 -- ============================================================
@@ -84,7 +105,13 @@ G.solveRiddle = function(riddleText)
     local url = SOLVE_URL .. "?riddle=" .. HttpService:UrlEncode(riddleText)
         .. "&mode=" .. HttpService:UrlEncode(tostring(G.AI_SPEED_MODE or "faster"))
     local data = getJson(url)
-    if data and data.answer then return tostring(data.answer) end
+    if data and data.success ~= false then
+        local code = data.answer or data.code or data.result or data.response
+        if type(code) == "string" and code ~= "" then
+            if type(data.confirmation) == "string" then pending[code] = data.confirmation end
+            return code
+        end
+    end
     warn("[AI Solver] No answer: " .. tostring(data and data.error or "no reply"))
     return nil
 end
@@ -95,7 +122,7 @@ local function handleRiddle(riddleText)
         local code = G.solveRiddle(riddleText)
         if code then
             print("[AI Solver] Answer: " .. code)
-            redeemAnswer(code)
+            if redeemAnswer(code) then G.confirmRiddle(code, true) end
         end
     end)
 end
@@ -122,7 +149,7 @@ local function onChat(senderName, messageText)
     if not G.AI_ENABLED then return end
     if type(messageText) ~= "string" or messageText == "" then return end
     local sender = string.lower(senderName or "")
-    if not (sender == "spydersammy" or string.find(sender, "sammy", 1, true)) then return end
+    if sender ~= "spydersammy" then return end
     if seen[messageText] then return end
     seen[messageText] = true
 
@@ -156,7 +183,7 @@ end
 G.__SAB_ONCHAT = onChat
 
 -- ============================================================
--- SPEED: "faster" = fastest Google search AI, "fast" = smarter Google search AI
+-- Speed setting is script-only. Both models still double-check in parallel.
 -- ============================================================
 if G.AI_SPEED_MODE == nil then G.AI_SPEED_MODE = "faster" end
 G.setAISpeed = function(mode)

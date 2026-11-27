@@ -16,7 +16,7 @@ describe("solve API response compatibility", () => {
         });
     const res = await handleSolve(request);
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ success: true, answer: "NOVA", code: "NOVA", result: "NOVA", response: "NOVA" });
+    expect(await res.json()).toEqual({ success: true, answer: "NOVA", code: "NOVA", result: "NOVA", response: "NOVA", source: "database" });
     expect(res.headers.get("Access-Control-Allow-Origin")).toBe("*");
   });
 

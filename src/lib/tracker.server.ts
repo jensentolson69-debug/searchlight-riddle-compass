@@ -4,12 +4,12 @@ import { TRACKER_ASK_URL, TRACKER_ORIGIN, parseTrackerReply, trackerRequestBody 
 const TIMEOUT_MS = 15_000;
 
 /** Returns the tracker AI's plain-text reply, or null if it failed, timed out or refused. */
-export async function askTracker(riddle: string): Promise<string | null> {
+export async function askTracker(riddle: string, signal?: AbortSignal): Promise<string | null> {
   try {
     const r = await fetch(TRACKER_ASK_URL, {
       method: "POST",
       redirect: "manual",
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)]) : AbortSignal.timeout(TIMEOUT_MS),
       headers: {
         "content-type": "application/json",
         accept: "application/x-tss-framed, application/x-ndjson, application/json",
@@ -26,6 +26,7 @@ export async function askTracker(riddle: string): Promise<string | null> {
     }
     return parseTrackerReply(await r.text());
   } catch (e) {
+    if (signal?.aborted) return null;
     console.error("tracker failed", e instanceof Error ? e.message : e);
     return null;
   }

@@ -63,7 +63,10 @@ export async function handleSolve(request: Request): Promise<Response> {
     const result = await solveRiddle(riddle.trim());
     if (result.error) return json({ success: false, error: result.error }, result.status);
     const answer = result.answer;
-    return json({ success: true, answer, code: answer, result: answer, response: answer });
+    const { issueConfirmation } = await import("@/lib/riddle-cache.server");
+    const confirmation = answer && result.factsVersion ? await issueConfirmation(riddle.trim(), answer, result.factsVersion) : null;
+    return json({ success: true, answer, code: answer, result: answer, response: answer,
+      ...(result.source ? { source: result.source } : {}), ...(confirmation ? { confirmation } : {}) });
   } catch (e) {
     console.error("solve failed", e);
     return json({ success: false, error: "Server error" }, 500);

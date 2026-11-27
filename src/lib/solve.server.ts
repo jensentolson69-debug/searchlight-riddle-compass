@@ -12,6 +12,9 @@ import { loadAaNotesText } from "./aa-notes.server";
 import { askTracker } from "./tracker.server";
 import { TRACKER_DATABASE } from "./tracker-database.server";
 import { isUnknown, quickTrackerCode } from "./tracker-reply";
+import { loadTrackerDatabase } from "./tracker-sync.server";
+import { factsVersion, loadConfirmedRiddle } from "./riddle-cache.server";
+import { raceConfirmed } from "./riddle-cache";
 
 // The user's own Sammy / game facts (from the original solver). Corrected per the user: cat = NOVA,
 // "best brainrot" = STRAWBERRYELEPHANT.
@@ -107,7 +110,7 @@ ${OWN_FACTS}
 const CONFIRMED = `"best brainrot" = STRAWBERRYELEPHANT. "best mutation" = HACKER (not YINGYANG). Best brainrot from a Secret Lucky Block = CELESTIALPEGASUS. Brainrot that is red and looks scared = CHACHECHI. Brainrot from a Secret Lucky Block that got nerfed last time = LASECRETCOMBINASION. Sammy's favourite/favorite brainrot = MEOWL (not STRAWBERRYELEPHANT). Sammy's cat = NOVA. Sammy's age = 24. Sammy's username = SPYDERSAMMY. Sammy's favourite mutation = YINGYANG (spelled exactly YINGYANG).`;
 
 /** Database check: confirmed overrides + live Admin Abuse notes + user's list + tracker Database. */
-function buildDatabasePrompt(aaNotes: string): string {
+function buildDatabasePrompt(aaNotes: string, trackerDatabase = TRACKER_DATABASE): string {
   const aaSection = aaNotes
     ? `\n\n=== LIVE ADMIN ABUSE NOTES (Sammy talking in-game about new updates/stuff — newest facts) ===\n${aaNotes}`
     : "";
@@ -131,7 +134,7 @@ ${aaSection}
 ${OWN_FACTS}
 
 === C. TRACKER WEBSITE DATABASE ===
-${TRACKER_DATABASE}`;
+${trackerDatabase}`;
 }
 
 function buildGooglePrompt(aaNotes: string): string {
@@ -156,12 +159,13 @@ const MODEL = "google/gemini-3.1-flash-lite";
 // parallel, so checking twice costs no extra time.
 const CHECK_MODEL = "google/gemini-3-flash-preview";
 
-export type SolveSource = "database" | "tracker" | "google";
+export type SolveSource = "database" | "tracker" | "google" | "cache";
 export type SolveResult = {
   answer: string | null;
   error: string | null;
   status: number;
   source?: SolveSource;
+  factsVersion?: string;
 };
 
 type AiResult = { code: string | null; error: SolveResult | null };
@@ -172,9 +176,11 @@ async function callAi(
   riddle: string,
   withSearch: boolean,
   model: string = MODEL,
+  signal?: AbortSignal,
 ): Promise<AiResult> {
   const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
+    ...(signal ? { signal } : {}),
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${key}`,
@@ -211,42 +217,64 @@ async function callAi(
 type Checked = { code: string | null; candidates: string[]; error: SolveResult | null };
 
 /** Ask two models at once; `code` is set only when both give the same real answer. */
-async function checkTwice(key: string, system: string, riddle: string, withSearch: boolean): Promise<Checked> {
+async function checkTwice(key: string, system: string, riddle: string, withSearch: boolean, signal?: AbortSignal): Promise<Checked> {
   const [a, b] = await Promise.all([
-    callAi(key, system, riddle, withSearch, MODEL),
-    callAi(key, system, riddle, withSearch, CHECK_MODEL),
+    callAi(key, system, riddle, withSearch, MODEL, signal),
+    callAi(key, system, riddle, withSearch, CHECK_MODEL, signal),
   ]);
   const candidates = [a.code, b.code].filter((c): c is string => !isUnknown(c));
-  const agreed = candidates.length === 2 && candidates[0] === candidates[1] ? candidates[0]! : null;
+  const agreed = candidates.length === 2 && candidates[0] === candidates[1] ? candidates[0] ?? null : null;
   // Stop only when BOTH checks hit credits/rate limits; one failed check just means "not confirmed".
   const hardError = a.error && b.error ? ([a.error, b.error].find((e) => e.status !== 500) ?? null) : null;
   return { code: agreed, candidates, error: hardError };
 }
 
 export async function solveRiddle(riddle: string): Promise<SolveResult> {
+  const controller = new AbortController();
+  const savedPromise = loadConfirmedRiddle(riddle);
+  const contextPromise = Promise.all([loadAaNotesText(), loadTrackerDatabase()]).then(async ([aaNotes, trackerDatabase]) => ({
+    aaNotes, trackerDatabase, version: await factsVersion(`${CONFIRMED}\n${OWN_FACTS}\n${aaNotes}\n${trackerDatabase}`),
+  }));
+  // Website requests begin immediately, alongside the saved-answer lookup. Google stays last.
+  const trackerReplies = Promise.all([askTracker(riddle, controller.signal), askTracker(riddle, controller.signal)]);
+  const cached = Promise.all([savedPromise, contextPromise]).then(([saved, context]): SolveResult | null => {
+    if (!saved || saved.facts_version !== context.version || Date.parse(saved.expires_at) <= Date.now()) return null;
+    controller.abort();
+    return { answer: saved.answer, error: null, status: 200, source: "cache", factsVersion: context.version };
+  });
+  const fresh = solveFresh(riddle, contextPromise, trackerReplies, controller.signal);
+  return raceConfirmed(cached, fresh);
+}
+
+async function solveFresh(
+  riddle: string,
+  contextPromise: Promise<{ aaNotes: string; trackerDatabase: string; version: string }>,
+  trackerReplies: Promise<(string | null)[]>,
+  signal: AbortSignal,
+): Promise<SolveResult> {
+  const { aaNotes, trackerDatabase, version } = await contextPromise;
   const key = process.env["LOVABLE_API_KEY"];
   if (!key) return { answer: null, error: "AI not configured", status: 500 };
   const ok = (answer: string, source: SolveSource, extra: object = {}): SolveResult => {
     console.log(`solve: ${source}`, JSON.stringify({ riddle, answer, ...extra }));
-    return { answer, error: null, status: 200, source };
+    return { answer, error: null, status: 200, source, factsVersion: version };
   };
 
   // Ask the website AI and check the database (twice, in parallel) at the same time.
-  const trackerReplyPromise = askTracker(riddle);
-  const aaNotes = await loadAaNotesText();
-  const fromDb = await checkTwice(key, buildDatabasePrompt(aaNotes), riddle, false);
+  const fromDb = await checkTwice(key, buildDatabasePrompt(aaNotes, trackerDatabase), riddle, false, signal);
   if (fromDb.error) return fromDb.error;
 
   // Both database checks agree: it wins even over the website AI, so send it right away.
   if (fromDb.code) return ok(fromDb.code, "database");
 
   // Otherwise use the website AI's answer, read twice when it is a sentence.
-  const trackerReply = await trackerReplyPromise;
+  const [trackerReply, secondReply] = await trackerReplies;
   let trackerCode: string | null = null;
   if (trackerReply) {
     trackerCode = quickTrackerCode(riddle, trackerReply);
+    if (trackerCode && trackerCode !== quickTrackerCode(riddle, secondReply ?? "") && !fromDb.candidates.includes(trackerCode)) trackerCode = null;
     if (!trackerCode) {
-      const read = await checkTwice(key, extractPrompt(trackerReply), riddle, false);
+      const read = await checkTwice(key, extractPrompt(trackerReply), riddle, false, signal);
       if (read.error) return read.error;
       // The two readings disagree: take the one a database check also gave.
       trackerCode = read.code ?? read.candidates.find((c) => fromDb.candidates.includes(c)) ?? null;
@@ -255,11 +283,11 @@ export async function solveRiddle(riddle: string): Promise<SolveResult> {
   }
 
   // Neither knows: Google Search, also checked twice.
-  const fromGoogle = await checkTwice(key, buildGooglePrompt(aaNotes), riddle, true);
+  const fromGoogle = await checkTwice(key, buildGooglePrompt(aaNotes), riddle, true, signal);
   if (fromGoogle.error) return fromGoogle.error;
   const known = [...fromDb.candidates];
   const googleCode =
-    fromGoogle.code ?? fromGoogle.candidates.find((c) => known.includes(c)) ?? fromGoogle.candidates[0] ?? fromDb.candidates[0];
+    fromGoogle.code ?? fromGoogle.candidates.find((c) => known.includes(c));
   if (!googleCode) return { answer: null, error: "No answer found", status: 422 };
   return ok(googleCode, "google", { trackerReply, google: fromGoogle.candidates });
 }

@@ -12,8 +12,10 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiSolveRouteImport } from './routes/api/solve'
 import { Route as ApiPublicAaNotesRouteImport } from './routes/api/public/aa-notes'
+import { Route as ApiPublicConfirmRiddleRouteImport } from './routes/api/public/confirm-riddle'
 import { Route as ApiPublicScriptDotluaRouteImport } from './routes/api/public/script[.]lua'
 import { Route as ApiPublicSolveRouteImport } from './routes/api/public/solve'
+import { Route as ApiPublicJobsRefreshTrackerRouteImport } from './routes/api/public/jobs/refresh-tracker'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -30,6 +32,11 @@ const ApiPublicAaNotesRoute = ApiPublicAaNotesRouteImport.update({
   path: '/api/public/aa-notes',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicConfirmRiddleRoute = ApiPublicConfirmRiddleRouteImport.update({
+  id: '/api/public/confirm-riddle',
+  path: '/api/public/confirm-riddle',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicScriptDotluaRoute = ApiPublicScriptDotluaRouteImport.update({
   id: '/api/public/script.lua',
   path: '/api/public/script.lua',
@@ -40,28 +47,40 @@ const ApiPublicSolveRoute = ApiPublicSolveRouteImport.update({
   path: '/api/public/solve',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicJobsRefreshTrackerRoute =
+  ApiPublicJobsRefreshTrackerRouteImport.update({
+    id: '/api/public/jobs/refresh-tracker',
+    path: '/api/public/jobs/refresh-tracker',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/api/solve': typeof ApiSolveRoute
   '/api/public/aa-notes': typeof ApiPublicAaNotesRoute
+  '/api/public/confirm-riddle': typeof ApiPublicConfirmRiddleRoute
   '/api/public/script.lua': typeof ApiPublicScriptDotluaRoute
   '/api/public/solve': typeof ApiPublicSolveRoute
+  '/api/public/jobs/refresh-tracker': typeof ApiPublicJobsRefreshTrackerRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/api/solve': typeof ApiSolveRoute
   '/api/public/aa-notes': typeof ApiPublicAaNotesRoute
+  '/api/public/confirm-riddle': typeof ApiPublicConfirmRiddleRoute
   '/api/public/script.lua': typeof ApiPublicScriptDotluaRoute
   '/api/public/solve': typeof ApiPublicSolveRoute
+  '/api/public/jobs/refresh-tracker': typeof ApiPublicJobsRefreshTrackerRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/api/solve': typeof ApiSolveRoute
   '/api/public/aa-notes': typeof ApiPublicAaNotesRoute
+  '/api/public/confirm-riddle': typeof ApiPublicConfirmRiddleRoute
   '/api/public/script.lua': typeof ApiPublicScriptDotluaRoute
   '/api/public/solve': typeof ApiPublicSolveRoute
+  '/api/public/jobs/refresh-tracker': typeof ApiPublicJobsRefreshTrackerRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -69,30 +88,38 @@ export interface FileRouteTypes {
     | '/'
     | '/api/solve'
     | '/api/public/aa-notes'
+    | '/api/public/confirm-riddle'
     | '/api/public/script.lua'
     | '/api/public/solve'
+    | '/api/public/jobs/refresh-tracker'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/api/solve'
     | '/api/public/aa-notes'
+    | '/api/public/confirm-riddle'
     | '/api/public/script.lua'
     | '/api/public/solve'
+    | '/api/public/jobs/refresh-tracker'
   id:
     | '__root__'
     | '/'
     | '/api/solve'
     | '/api/public/aa-notes'
+    | '/api/public/confirm-riddle'
     | '/api/public/script.lua'
     | '/api/public/solve'
+    | '/api/public/jobs/refresh-tracker'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ApiSolveRoute: typeof ApiSolveRoute
   ApiPublicAaNotesRoute: typeof ApiPublicAaNotesRoute
+  ApiPublicConfirmRiddleRoute: typeof ApiPublicConfirmRiddleRoute
   ApiPublicScriptDotluaRoute: typeof ApiPublicScriptDotluaRoute
   ApiPublicSolveRoute: typeof ApiPublicSolveRoute
+  ApiPublicJobsRefreshTrackerRoute: typeof ApiPublicJobsRefreshTrackerRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -118,6 +145,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicAaNotesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/confirm-riddle': {
+      id: '/api/public/confirm-riddle'
+      path: '/api/public/confirm-riddle'
+      fullPath: '/api/public/confirm-riddle'
+      preLoaderRoute: typeof ApiPublicConfirmRiddleRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/script.lua': {
       id: '/api/public/script.lua'
       path: '/api/public/script.lua'
@@ -132,6 +166,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicSolveRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/jobs/refresh-tracker': {
+      id: '/api/public/jobs/refresh-tracker'
+      path: '/api/public/jobs/refresh-tracker'
+      fullPath: '/api/public/jobs/refresh-tracker'
+      preLoaderRoute: typeof ApiPublicJobsRefreshTrackerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -139,8 +180,10 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ApiSolveRoute: ApiSolveRoute,
   ApiPublicAaNotesRoute: ApiPublicAaNotesRoute,
+  ApiPublicConfirmRiddleRoute: ApiPublicConfirmRiddleRoute,
   ApiPublicScriptDotluaRoute: ApiPublicScriptDotluaRoute,
   ApiPublicSolveRoute: ApiPublicSolveRoute,
+  ApiPublicJobsRefreshTrackerRoute: ApiPublicJobsRefreshTrackerRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

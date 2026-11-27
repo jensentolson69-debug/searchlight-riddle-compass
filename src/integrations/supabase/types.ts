@@ -35,12 +35,63 @@ export type Database = {
         }
         Relationships: []
       }
+      solved_riddles: {
+        Row: {
+          answer: string
+          expires_at: string
+          facts_version: string
+          riddle: string
+          riddle_key: string
+          verified_at: string
+        }
+        Insert: {
+          answer: string
+          expires_at: string
+          facts_version: string
+          riddle: string
+          riddle_key: string
+          verified_at?: string
+        }
+        Update: {
+          answer?: string
+          expires_at?: string
+          facts_version?: string
+          riddle?: string
+          riddle_key?: string
+          verified_at?: string
+        }
+        Relationships: []
+      }
+      tracker_snapshots: {
+        Row: {
+          content: string
+          id: string
+          last_error: string | null
+          lease_until: string | null
+          refreshed_at: string | null
+        }
+        Insert: {
+          content?: string
+          id: string
+          last_error?: string | null
+          lease_until?: string | null
+          refreshed_at?: string | null
+        }
+        Update: {
+          content?: string
+          id?: string
+          last_error?: string | null
+          lease_until?: string | null
+          refreshed_at?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      acquire_tracker_sync: { Args: never; Returns: boolean }
     }
     Enums: {
       [_ in never]: never
